@@ -7,18 +7,20 @@ layout (location = 2) in vec3 VertNormal; //inNormal
 /// @brief the in uv
 layout (location = 1) in vec2 TexCoords; //inUV
 
-smooth out vec2 FragTexCoords; //TexCoords
-smooth out vec3 FragPosition; //WorldPos
-smooth out vec3 FragNormal; //Normal
+out vec2 FragTexCoords; //TexCoords
+out vec3 FragPosition; //WorldPos
+out vec3 FragNormal; //Normal
 
 uniform mat4 MVP;
 uniform mat3 normalMatrix;
 uniform mat4 M;
 
+
 void main()
 {
-  FragPosition = vec3(M * vec4(VertPosition, 1.0f));
-  FragNormal=normalMatrix*VertNormal;
-  FragTexCoords=TexCoords;
-  gl_Position = MVP*vec4(VertPosition,1.0);
+
+    FragPosition = vec3(M * vec4(VertPosition, 1.0f));
+    FragNormal=normalMatrix*VertNormal;
+    FragTexCoords=10*TexCoords;
+    gl_Position = MVP*vec4(VertPosition,1.0);
 }

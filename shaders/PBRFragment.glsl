@@ -1,26 +1,26 @@
-#version 330 core
+#version 420 core
 // This code is based on code from here https://learnopengl.com/#!PBR/Lighting
 
 out vec4 fragColour;
 
-smooth in vec2 FragTexCoords; //TexCoords
-smooth in vec3 FragPosition; //WorldPos
-smooth in vec3 FragNormal; //Normal
+in vec2 FragTexCoords; //TexCoords
+in vec3 FragPosition; //WorldPos
+in vec3 FragNormal; //Normal
 in mat3 TBN;
 
 //material parameters
 uniform vec3 albedo;
-uniform float metallic;
-uniform float roughness;
 uniform float ao;
 
 uniform float texCoordScale = 10.0f;
 
-//uniform sampler2D albedoMap;
-//uniform sampler2D normalMap;
-//uniform sampler2D metallicMap;
-//uniform sampler2D roughnessMap;
-//uniform sampler2D aoMap;
+uniform sampler2D textMap;
+uniform sampler2D glossMap;
+uniform sampler2D renderedTexture;
+uniform samplerCube envMap;
+
+// Set the maximum environment level of detail (cannot be queried from GLSL apparently)
+uniform int envMaxLOD = 8;
 
 // lights
 uniform vec3 lightPositions[4];
@@ -73,179 +73,97 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0)
 }
 // ----------------------------------------------------------------------------
 
-//Normal disturbance functions
+const vec2 k_size = vec2(2.0,0.0);
+const ivec2 k_offset = ivec2(-1, 0);
 
-mat4 rotationMatrix(vec3 axis, float angle)
-{
-    //axis = normalize(axis);
-    float s = sin(angle);
-    float c = cos(angle);
-    float oc = 1.0 - c;
-    return mat4(oc * axis.x * axis.x + c,           oc * axis.x * axis.y - axis.z * s,  oc * axis.z * axis.x + axis.y * s,  0.0,
-                oc * axis.x * axis.y + axis.z * s,  oc * axis.y * axis.y + c,           oc * axis.y * axis.z - axis.x * s,  0.0,
-                oc * axis.z * axis.x - axis.y * s,  oc * axis.y * axis.z + axis.x * s,  oc * axis.z * axis.z + c,           0.0,
-                0.0,                                0.0,                                0.0,                                1.0);
+float random (in vec2 st) {
+    return fract(sin(dot(st.xy,
+                         vec2(12.9898,78.233)))*
+        43758.5453123);
 }
-/*
-  * Rotate a vector vec by using the rotation that transforms from src to tgt.
-  */
-vec3 rotateVector(vec3 src, vec3 tgt, vec3 vec) {
-    float angle = acos(dot(src,tgt));
 
-    // Check for the case when src and tgt are the same vector, in which case
-    // the cross product will be ill defined.
-    if (angle == 0.0) {
-        return vec;
+float noise (in vec2 st) {
+    vec2 i = floor(st);
+    vec2 f = fract(st);
+
+    // Four corners in 2D of a tile
+    float a = random(i);
+    float b = random(i + vec2(1.0, 0.0));
+    float c = random(i + vec2(0.0, 1.0));
+    float d = random(i + vec2(1.0, 1.0));
+
+    vec2 u = f * f * (3.0 - 2.0 * f);
+
+    return mix(a, b, u.x) +
+            (c - a)* u.y * (1.0 - u.x) +
+            (d - b) * u.x * u.y;
+}
+
+
+float fbm (in vec2 st) {
+    // Initial values
+float value = -0.072;
+float amplitud = 0.308;
+    float frequency = 0.;
+    //
+    // Loop of octaves
+    for (int i = 0; i < 7; i++) {
+        value += amplitud * noise(st);
+        st *= 8.064;
+        amplitud *= 0.612;
     }
-    vec3 axis = normalize(cross(src,tgt));
-    mat4 R = rotationMatrix(axis,angle);
-
-    // Rotate the vec by this rotation matrix
-    vec4 _norm = R*vec4(vec,1.0);
-    return _norm.xyz / _norm.w;
+    return value;
 }
 
-//SMOOTHSTEP IMPLEMENT (A, B, C)
-
-float pulse( float edge0, float edge1, float x)
-{
-    return step(edge0, x) - step(edge1, x);
-}
-
-float pulsetrain(float edge, float period, float x)
-{
-    return pulse(edge, period, mod(x, period));
-}
-
-/******************************************************
-  * The following simplex noise functions have been taken from WebGL-noise
-  * https://github.com/stegu/webgl-noise/blob/master/src/noise2D.glsl
-  *>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>*/
-vec3 mod289(vec3 x) {
-  return x - floor(x * (1.0 / 289.0)) * 289.0;
-}
-
-vec2 mod289(vec2 x) {
-  return x - floor(x * (1.0 / 289.0)) * 289.0;
-}
-
-vec3 permute(vec3 x) {
-  return mod289(((x*34.0)+1.0)*x);
-}
-
-float snoise(vec2 v) {
-  const vec4 C = vec4(0.211324865405187,  // (3.0-sqrt(3.0))/6.0
-                      0.366025403784439,  // 0.5*(sqrt(3.0)-1.0)
-                     -0.577350269189626,  // -1.0 + 2.0 * C.x
-                      0.024390243902439); // 1.0 / 41.0
-// First corner
-  vec2 i  = floor(v + dot(v, C.yy) );
-  vec2 x0 = v -   i + dot(i, C.xx);
-
-// Other corners
-  vec2 i1;
-  //i1.x = step( x0.y, x0.x ); // x0.x > x0.y ? 1.0 : 0.0
-  //i1.y = 1.0 - i1.x;
-  i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
-  // x0 = x0 - 0.0 + 0.0 * C.xx ;
-  // x1 = x0 - i1 + 1.0 * C.xx ;
-  // x2 = x0 - 1.0 + 2.0 * C.xx ;
-  //vec4 x12 = x0.xyxy + C.xxzz;
-  vec4 x12 = vec4 (x0.x, x0.y, x0.x, x0.y) + vec4(C.x, C.x, C.z, C.z);
-  x12.xy -= i1;
-
-// Permutations
-  i = mod289(i); // Avoid truncation effects in permutation
-  vec3 p = permute( permute( i.y + vec3(0.0, i1.y, 1.0 ))
-                + i.x + vec3(0.0, i1.x, 1.0 ));
-
-  vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy), dot(x12.zw,x12.zw)), 0.0);
-  m = m*m ;
-  m = m*m ;
-
-// Gradients: 41 points uniformly over a line, mapped onto a diamond.
-// The ring size 17*17 = 289 is close to a multiple of 41 (41*7 = 287)
-
-  vec3 x = 2.0 * fract(p * C.www) - 1.0;
-  vec3 h = abs(x) - 0.5;
-  vec3 ox = floor(x + 0.5);
-  vec3 a0 = x - ox;
-
-// Normalise gradients implicitly by scaling m
-// Approximation of: m *= inversesqrt( a0*a0 + h*h );
-  m *= 1.79284291400159 - 0.85373472095314 * ( a0*a0 + h*h );
-
-// Compute final noise value at P
-  vec3 g;
-  g.x  = a0.x  * x0.x  + h.x  * x0.y;
-  g.yz = a0.yz * x12.xz + h.yz * x12.yw;
-  return 130.0 * dot(m, g);
-}
-/*********** END REFERENCE ************************/
-
-/***************************************************
-  * This function is ported from
-  * https://cmaher.github.io/posts/working-with-simplex-noise/
-  ****************************************************/
-float sumOctave(in vec2 pos,
-                in int num_iterations,
-                in float persistence,
-                in float scale,
-                in float low,
-                in float high) {
-    float maxAmp = 0.0f;
-    float amp = 1.0f;
-    float freq = scale;
-    float noise = 0.0f;
-    int i;
-
-    for (i = 0; i < num_iterations; ++i) {
-        noise += snoise(pos * freq) * amp;
-        maxAmp += amp;
-        amp *= persistence;
-        freq *= 2.0f;
-    }
-    noise /= maxAmp;
-    noise = noise*(high-low)*0.5f + (high+low)*0.5f;
-    return noise;
-}
 
 void main()
 {
+    vec3 height_map = texture2D(renderedTexture, FragTexCoords).rgb;
 
-    vec3 normal = normalize(FragNormal);
+    vec3 np = normalize(FragNormal);
+
     vec3 viewer = normalize(camPos - FragPosition);
+
+    vec2 st = FragTexCoords*0.1;
+
+    float v = smoothstep(0.5, 0.51, fbm(st * 12.9))+0.1;
+
+    float metallic2 =1-v;
+    float roughness2 =v;
+
+    vec3 lookup = reflect(viewer,np);
+
+    // This call actually finds out the current LOD
+    float lod = textureQueryLod(envMap, lookup).x;
+
+    // Determine the gloss value from our input texture, and scale it by our LOD resolution
+    float gloss = (1.0 - texture(glossMap, FragTexCoords*2).r) * float(envMaxLOD);
+
+    // This call determines the current LOD value for the texture map
+    vec4 colour = textureLod(envMap, lookup, 1.0);
+
+    // This call just retrieves whatever you want from the environment map
+    //vec4 colour = texture(envMap, lookup);
+
+
+    //ASTEA DOUA MERG CU UNS TRI!!!!!
+    //vec3 text = texture2D(textMap, (FragTexCoords*0.5-vec2(0.0, 0.4))).rgb;
+    vec3 text = texture2D(textMap, FragTexCoords*0.4-vec2(0.5f, 0.0f)).rgb;
+    //POATE SCRIS MAI MARE!!!
+
+    //vec3 albedo2 = vec3( max((albedo.x-text.x), 0), max((albedo.y-text.y), 0), max((albedo.z-text.z), 0) );
+    //INMULTIT CU DISPLACEMENT
+    float v2 = smoothstep(0.5, 0.51, fbm(st * 12.9));
+    vec3 albedo2 = vec3( min((albedo.x+text.x), 1), min((albedo.y+text.y), 1), min((albedo.z+text.z), 1) )-v2*vec3(0.5, 0.5, 0.5);
 
     // reflectance at normal incidence
     // if it's a metal, their albedo color is F0
     vec3 F0 = albedo;
 
-    //Normal Disturbance
-
-    //float period = 0.4;
-    //float edge = 0.1;
-    //float n = pulsetrain(edge, period, normal.r);
-
-    // The source is just up in the Z-direction
-    vec3 src = vec3(0.0, 0.0, 1.0);
-    vec3 tgt = vec3(0.0, 0.0, 1.0);
-    tgt = vec3(1.0, 1.0, 1.0) * pulsetrain(0.18f, 0.3f, normal.x);
-
-    // Perturb the normal according to the target
-    vec3 np = rotateVector(src, tgt, normal);
-
-    float metallic2 = 1-sumOctave(FragTexCoords, 12, 0.5f, 10.0f, 0.0f, 1.0f);
-    float roughness2 = metallic2;
-    float ao2 = metallic2;
-
-
-
-
-
-
     // reflectance equation
+    // ADDED 4 MORE LIGHTS
     vec3 Lo = vec3(0.0);
-    for(int i = 0; i < 4; ++i) 
+    for(int i = 0; i < 6; ++i)
     {
         // calculate per-light radiance
         vec3 light = normalize(lightPositions[i] - FragPosition);
@@ -255,49 +173,36 @@ void main()
         vec3 radiance = lightColors[i] * attenuation;
 
         //BRDF
-        float NDF = DistributionGGX(np, halfVect, roughness);
-        float G   = GeometrySmith(np, viewer, light, roughness);
-        vec3 F    = fresnelSchlick(max(dot(halfVect, viewer), 0.0), F0);
+        float NDF = DistributionGGX(np, halfVect, roughness2);
+        float G   = GeometrySmith(np, viewer, light, roughness2);
+        vec3 F    = fresnelSchlick(max(dot(halfVect, viewer), 0.0), vec3(1.0f, 1.0f, 1.0f));
            
         vec3 nominator    = NDF * G * F; 
-        float denominator = 4 * max(dot(viewer, np), 0.0) * max(dot(light, np), 0.0) + 0.001; // 0.001 to prevent divide by zero.
+        float denominator = 6 * max(dot(viewer, np), 0.0) * max(dot(light, np), 0.0) + 0.001; // 0.001 to prevent divide by zero.
         vec3 brdf = nominator / denominator;
         
         // kS is equal to Fresnel
         vec3 kS = F;
-        // for energy conservation, the diffuse and specular light can't
-        // be above 1.0 (unless the surface emits light); to preserve this
         // relationship the diffuse component (kD) should equal 1.0 - kS.
         vec3 kD = vec3(1.0) - kS;
-        // multiply kD by the inverse metalness such that only non-metals 
-        // have diffuse lighting, or a linear blend if partly metal (pure metals
-        // have no diffuse light).
-        kD *= 1.0 - metallic;
+
+        kD *= 1.0 - metallic2;
 
         // scale light by NdotL
         float NdotL = max(dot(np, light), 0.0);
 
         // add to outgoing radiance Lo
-        Lo += (kD * albedo / PI + brdf) * radiance * NdotL;  // note that we already multiplied the BRDF by the Fresnel (kS) so we won't multiply by kS again
+        Lo += (kD * (albedo2*roughness2) / PI + brdf) * radiance * NdotL;  // note that we already multiplied the BRDF by the Fresnel (kS) so we won't multiply by kS again
     }   
-    
-    // ambient lighting (note that the next IBL tutorial will replace
-    // this ambient lighting with environment lighting).
-    vec3 ambient = vec3(0.03) * albedo * ao;
+
+    vec3 ambient = vec3(0.3) * albedo2 * ao;
 
     vec3 color = ambient + Lo;
 
     color = color / (color + vec3(1.0));
-
     color = pow(color, vec3(1.0/2.2));
 
+    //vec3 intermediate = texture2D(glossMap, FragTexCoords).rgb;
+
     fragColour = vec4(color, 1.0);
-
-
-    // Calculates parameters from textures, rather than from P
-    //vec3 albedo     = pow(texture(albedoMap, FragTexCoords).rgb, vec3(2.2));
-    //float metallic  = texture(metallicMap, FragTexCoords*texCoordScale).r;
-    //float roughness = texture(roughnessMap, FragTexCoords*texCoordScale).r;
-    //float ao        = texture(aoMap, FragTexCoords).r;
-
 }

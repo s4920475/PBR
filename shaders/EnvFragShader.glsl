@@ -1,9 +1,9 @@
 #version 420 core
 
-// Attributes passed on from the vertex shader
-smooth in vec3 FragPosition;
-smooth in vec3 FragNormal;
-smooth in vec2 FragTexCoords;
+// Attributes passed on from the vertex shader (SHOULD BE SMOOTH?)
+in vec3 FragPosition;
+in vec3 FragNormal;
+in vec2 FragTexCoords;
 
 /// @brief our output Frag colour
 layout (location=0) out vec4 FragColour;

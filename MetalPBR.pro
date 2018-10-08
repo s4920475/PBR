@@ -1,5 +1,5 @@
 # This specifies the exe name
-TARGET=MetalPBR
+TARGET=MetalPBR2
 # where to put the .o files
 OBJECTS_DIR=obj
 # core Qt Libs to use add more here if needed.
@@ -28,13 +28,17 @@ DESTDIR=./
 # add the glsl shader files
 OTHER_FILES+= shaders/*.glsl \
               README.md \
-              data/bottleOpener.obj \
+              data/*.obj \
               shaders/myPBRVertex.glsl \
               shaders/myPBRfragment.glsl \
               shaders/EnvFragShader.glsl \
+              shaders/NormalVertex.glsl \
+              shaders/NormalFragment.glsl \
+              shaders/PBRVertex2.glsl \
+              shaders/PBRFragment2.glsl \
               data/*.png \
-              data/*.jpg \
-              data/*.tiff \
+              images/*.jpg \
+              images/*.tiff
 
 # were are going to default to a console app
 CONFIG += console

@@ -24,13 +24,10 @@ NGLScene::NGLScene()
   setTitle( "PBR with GLSL" );
 }
 
-
-
 NGLScene::~NGLScene()
 {
   std::cout << "Shutting down NGL, removing VAO's and Shaders\n";
 }
-
 
 
 void NGLScene::resizeGL( int _w, int _h )
@@ -40,26 +37,21 @@ void NGLScene::resizeGL( int _w, int _h )
   m_win.height = static_cast<int>( _h * devicePixelRatio() );
 }
 
-
 // lights
-std::array<ngl::Vec3,8> g_lightPositions = {{
-        ngl::Vec3(-7.0f,  0.0f, -7.0f),
-        ngl::Vec3( 7.0f,  0.0f, -7.0f),
-        ngl::Vec3(-7.0f,  0.0f, 7.0f),
-        ngl::Vec3( 7.0f,  0.0f, 7.0f),
-        ngl::Vec3(-6.0f, 0.0f, -2.0f),
-        ngl::Vec3(2.0f, 0.0f, -6.0f),
-        ngl::Vec3(-2.0f, 0.0f, 6.0f),
-        ngl::Vec3(6.0f, 0.0f, 2.0f)
+std::array<ngl::Vec3,6> g_lightPositions = {{
+        ngl::Vec3(-6.0f,  4.0f, -4.0f),
+        ngl::Vec3( 6.0f,  4.0f, -4.0f),
+        ngl::Vec3(-6.0f,  4.0f, 6.0f),
+        ngl::Vec3( 6.0f,  4.0f, 6.0f),
+        ngl::Vec3(-6.0f, 4.0f, 1.0),
+        ngl::Vec3(0.0f, 4.0f, -4.0f)
     }};
-
-
 
 
 void NGLScene::initializeGL()
 {
   // we must call that first before any other GL commands to load and link the
-  // gl commands from the lib, if that is not done program will crash
+  // gl commands from the lib, if that is not done program will crash##d,sl
   ngl::NGLInit::instance();
 
 
@@ -70,6 +62,32 @@ void NGLScene::initializeGL()
 #ifndef USINGIOS_
   glEnable( GL_MULTISAMPLE );
 #endif
+
+  // now to load the shader and set the values
+  // grab an instance of shader manager
+  ngl::ShaderLib* shaderN = ngl::ShaderLib::instance();
+  // we are creating a shader called PBR to save typos
+  // in the code create some constexpr
+  constexpr auto shaderNormal = "Normal";
+  constexpr auto vertexNormal  = "NormalVertex";
+  constexpr auto fragNormal    = "NormalFragment";
+
+  // create the shader program
+  shaderN->createShaderProgram( shaderNormal );
+  // now we are going to create empty shaders for Frag and Vert
+  shaderN->attachShader( vertexNormal, ngl::ShaderType::VERTEX );
+  shaderN->attachShader( fragNormal, ngl::ShaderType::FRAGMENT );
+  // attach the source
+  shaderN->loadShaderSource( vertexNormal, "/home/raluca/Documents/cpp/rendering/MetalPBR/shaders/NormalVertex.glsl" );
+  shaderN->loadShaderSource( fragNormal, "/home/raluca/Documents/cpp/rendering/MetalPBR/shaders/NormalFragment.glsl" );
+  // compile the shaders
+  shaderN->compileShader( vertexNormal );
+  shaderN->compileShader( fragNormal );
+  // add them to the program
+  shaderN->attachShaderToProgram( shaderNormal, vertexNormal );
+  shaderN->attachShaderToProgram( shaderNormal, fragNormal );
+  // now we have associated that data we can link the shader
+  shaderN->linkProgramObject( shaderNormal );
 
   ngl::ShaderLib* shaderF = ngl::ShaderLib::instance();
   constexpr auto shaderFloor = "Floor";
@@ -121,34 +139,41 @@ void NGLScene::initializeGL()
   // now we have associated that data we can link the shader
   shader->linkProgramObject( shaderProgram );
 
+  // now to load the shader and set the values
+  // grab an instance of shader manager
+  ngl::ShaderLib* shader2 = ngl::ShaderLib::instance();
+  // we are creating a shader called PBR to save typos
+  // in the code create some constexpr
+  constexpr auto shaderProgram2 = "PBR2";
+  constexpr auto vertexShader2  = "PBRVertex2";
+  constexpr auto fragShader2    = "PBRFragment2";
 
+  // create the shader program
+  shader2->createShaderProgram( shaderProgram2 );
+  // now we are going to create empty shaders for Frag and Vert
+  shader2->attachShader( vertexShader2, ngl::ShaderType::VERTEX );
+  shader2->attachShader( fragShader2, ngl::ShaderType::FRAGMENT );
+  // attach the source
+  shader2->loadShaderSource( vertexShader2, "/home/raluca/Documents/cpp/rendering/MetalPBR/shaders/PBRVertex2.glsl" );
+  shader2->loadShaderSource( fragShader2, "/home/raluca/Documents/cpp/rendering/MetalPBR/shaders/PBRFragment2.glsl" );
+  // compile the shaders
+  shader2->compileShader( vertexShader2 );
+  shader2->compileShader( fragShader2 );
+  // add them to the program
+  shader2->attachShaderToProgram( shaderProgram2, vertexShader2 );
+  shader2->attachShaderToProgram( shaderProgram2, fragShader2 );
+  // now we have associated that data we can link the shader
+  shader2->linkProgramObject( shaderProgram2 );
 
   // Create and compile the vertex and fragment shader
-  //FOR ENVIRONMENT MAP / CUBE MAP
-
-  ngl::ShaderLib* shaderE=ngl::ShaderLib::instance();
-
-  shaderE->loadShader("EnvironmentProgram",
-                      "shaders/PBRVertex.glsl",
-                      "shaders/EnvFragShader.glsl");
-
-  // Initialise our environment map here
-  initEnvironment();
-
-  // Initialise our gloss texture map here
-  initTexture(1, m_glossMapTex, "images/gloss.png");
-  shaderE->use("EnvironmentProgram");
-  shaderE->setUniform("glossMap", 1);
-
 
   // and make it active ready to load values
   ( *shader )[ "PBR" ]->use();
 
-
   // Now we will create a basic Camera from the graphics library
   // This is a static camera so it only needs to be set once
   // First create Values for the camera position
-  ngl::Vec3 from( 0, 5, 13 );
+  ngl::Vec3 from( 0, 5, 5 );
   ngl::Vec3 to( 0, 0, 0 );
   ngl::Vec3 up( 0, 1, 0 );
 
@@ -157,33 +182,43 @@ void NGLScene::initializeGL()
   // set the shape using FOV 45 Aspect Ratio based on Width and Height
   // The final two are near and far clipping planes of 0.5 and 10
   m_cam.setShape( 45.0f, 720.0f / 576.0f, 0.05f, 350.0f );
+  m_cam.pitch(20.0f);
 
 
   shader->setUniform("albedo",1.0f, 0.0f, 0.0f);
   shader->setUniform("ao",1.0f);
-  shader->setUniform("roughness", 1.0f);
-  shader->setUniform("metallic", 0.0f);
-
 
   shader->setUniform("camPos",m_cam.getEye().toVec3());
   shader->setUniform("exposure",1.0f);
 
-  m_mesh.reset(new ngl::Obj("data/bottleOpener.obj"));
+  m_mesh.reset(new ngl::Obj("data/top_quad_s_tri.obj"));
   m_mesh->createVAO();
+
+  (*shader2)["PBR2"]->use();
+
+  shader2->setUniform("albedo",1.0f, 0.0f, 0.0f);
+  shader2->setUniform("ao",1.0f);
+
+  shader2->setUniform("camPos",m_cam.getEye().toVec3());
+  shader2->setUniform("exposure",1.0f);
+
+  m_mesh2.reset(new ngl::Obj("data/bottom_unsmoothed.obj"));
+  m_mesh2->createVAO();
+
 
 
   ///ARRAY OF LIGHT COLORS
   ///
 
   std::array<ngl::Vec3,8>  lightColors = {{
-          ngl::Vec3(300.0f, 300.0f, 300.0f),
-          ngl::Vec3(300.0f, 300.0f, 300.0f),
-          ngl::Vec3(300.0f, 300.0f, 300.0f),
-          ngl::Vec3(300.0f, 300.0f, 300.0f),
-          ngl::Vec3(300.0f, 300.0f, 300.0f),
-          ngl::Vec3(300.0f, 300.0f, 300.0f),
-          ngl::Vec3(300.0f, 300.0f, 300.0f),
-          ngl::Vec3(300.0f, 300.0f, 300.0f)
+          ngl::Vec3(900.0f, 900.0f, 900.0f),
+          ngl::Vec3(900.0f, 900.0f, 900.0f),
+          ngl::Vec3(900.0f, 900.0f, 900.0f),
+          ngl::Vec3(900.0f, 900.0f, 900.0f),
+          ngl::Vec3(900.0f, 900.0f, 900.0f),
+          ngl::Vec3(900.0f, 900.0f, 900.0f),
+          ngl::Vec3(900.0f, 900.0f, 900.0f),
+          ngl::Vec3(900.0f, 900.0f, 900.0f)
       }};
 
   for(size_t i=0; i<g_lightPositions.size(); ++i)
@@ -199,90 +234,17 @@ void NGLScene::initializeGL()
   ///NGL PRIMITIVES FOR LIGHT AND FLOOR
   ngl::VAOPrimitives::instance()->createSphere("sphere",1.0,30.0f);
   ngl::VAOPrimitives::instance()->createTrianglePlane("floor",20,20,10,10,ngl::Vec3::up());
-
+  ngl::VAOPrimitives::instance()->createTrianglePlane("tex", 9.8,9.8, 10, 10, ngl::Vec3(0.0, 1.0, 0.0));
+  ngl::VAOPrimitives::instance()->createTrianglePlane("cap", 1, 1, 10, 10, ngl::Vec3::up());
 }
-
-
-
-
 
 void NGLScene::paintGL()
 {
 
-  //DRAW THE SKYBOX
-  /*float skyboxVertices[] = {
-      // positions
-      -15.0f,  15.0f, -15.0f,
-      -15.0f, -15.0f, -15.0f,
-       15.0f, -15.0f, -15.0f,
-       15.0f, -15.0f, -15.0f,
-       15.0f,  15.0f, -15.0f,
-      -15.0f,  15.0f, -15.0f,
-
-      -15.0f, -15.0f,  15.0f,
-      -15.0f, -15.0f, -15.0f,
-      -15.0f,  15.0f, -15.0f,
-      -15.0f,  15.0f, -15.0f,
-      -15.0f,  15.0f,  15.0f,
-      -15.0f, -15.0f,  15.0f,
-
-       15.0f, -15.0f, -15.0f,
-       15.0f, -15.0f,  15.0f,
-       15.0f,  15.0f,  15.0f,
-       15.0f,  15.0f,  15.0f,
-       15.0f,  15.0f, -15.0f,
-       15.0f, -15.0f, -15.0f,
-
-      -15.0f, -15.0f,  15.0f,
-      -15.0f,  15.0f,  15.0f,
-       15.0f,  15.0f,  15.0f,
-       15.0f,  15.0f,  15.0f,
-       15.0f, -15.0f,  15.0f,
-      -15.0f, -15.0f,  15.0f,
-
-      -15.0f,  15.0f, -15.0f,
-       15.0f,  15.0f, -15.0f,
-       15.0f,  15.0f,  15.0f,
-       15.0f,  15.0f,  15.0f,
-      -15.0f,  15.0f,  15.0f,
-      -15.0f,  15.0f, -15.0f,
-
-      -15.0f, -15.0f, -15.0f,
-      -15.0f, -15.0f,  15.0f,
-       15.0f, -15.0f, -15.0f,
-       15.0f, -15.0f, -15.0f,
-      -15.0f, -15.0f,  15.0f,
-       15.0f, -15.0f,  15.0f
-  };*/
-
   glViewport( 0, 0, m_win.width, m_win.height );
   // clear the screen and depth buffer
   glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
-
-
-  /*ngl::ShaderLib* shaderE = ngl::ShaderLib::instance();
-  ( *shaderE )[ "EnvironmentProgram" ]->use();
-
-  // skybox VAO
-  unsigned int skyboxVAO;
-  glGenVertexArrays(1, &skyboxVAO);
-  //glGenBuffers(1, &skyboxVBO);
-  glBindVertexArray(skyboxVAO);
-  //glBindBuffer(GL_ARRAY_BUFFER, skyboxVBO);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), &skyboxVertices, GL_STATIC_DRAW);
-  glEnableVertexAttribArray(0);
-  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-
-
-  // draw skybox as last
-
-  loadMatricesToShader2();
-  // skybox cube
-  glBindVertexArray(skyboxVAO);
-  initEnvironment();
-  glDrawArrays(GL_TRIANGLES, 0, 36);
-  glBindVertexArray(0);*/
-
+  glClearColor( 0.4f, 0.4f, 0.4f, 1.0f );
 
   // Rotation based on the mouse position for our global transform
   ngl::Mat4 rotX;
@@ -298,32 +260,128 @@ void NGLScene::paintGL()
   m_mouseGlobalTX.m_m[ 3 ][ 2 ] = m_modelPos.m_z;
 
 
+  GLuint FramebufferName = 0;
+  glGenFramebuffers(1, &FramebufferName);
+  glBindFramebuffer(GL_FRAMEBUFFER, FramebufferName);
+
+  GLuint renderedTexture;
+  glActiveTexture(GL_TEXTURE0+1);
+  glGenTextures(1, &renderedTexture);
+  glBindTexture(GL_TEXTURE_2D, renderedTexture);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 1024, 1024, 0, GL_RGB, GL_UNSIGNED_BYTE, 0);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
+  glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, renderedTexture, 0);
+  GLenum DrawBuffers[1]={GL_COLOR_ATTACHMENT0};
+  glDrawBuffers(1, DrawBuffers);
+
+  if ( glCheckFramebufferStatus ( GL_FRAMEBUFFER ) == GL_FRAMEBUFFER_COMPLETE )
+  {
+  // render to texture using FBO
+  // clear color and depth buffer
+      glViewport(0, 0, 1024, 1024);
+      glClearColor( 0.4f, 0.4f, 0.4f, 1.0f );
+      glClear ( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+
+
+        // drawing commands to the framebuffer object
+        // render to window system-provided framebuffer
+
+        ngl::VAOPrimitives* prim = ngl::VAOPrimitives::instance();
+
+
+        ngl::ShaderLib* shader = ngl::ShaderLib::instance();
+        (*shader)["Normal"]->use();
+        m_transform.setPosition(0.0f, 0.0f, 0.0f);
+        //m_transform.setRotation(90.0f, 0.0f, 0.0f);
+        //m_transform.setRotation(0.0f, 0.0f, 90.0f);
+
+        loadMatricesToShader3();
+
+        prim->draw("tex");
+  }
+
+
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  glViewport(0,0,1024,768);
+
   // grab an instance of the shader manager
   ngl::ShaderLib* shader = ngl::ShaderLib::instance();
   ( *shader )[ "PBR" ]->use();
 
+  // Initialise our environment map here
+
+  initTexture(5, m_renderedTex2, "images/black.png");
+  glActiveTexture(GL_TEXTURE0+5);
+  glBindTexture(GL_TEXTURE_2D, m_renderedTex2);
+  shader->setUniform("renderedTexture", 5);
+
+  initEnvironment();
+  // Initialise our gloss texture map here
+  initTexture(2, m_glossMapTex, "images/gloss.png");
+  glActiveTexture(GL_TEXTURE0+2);
+  glBindTexture(GL_TEXTURE_2D, m_glossMapTex);
+  shader->setUniform("glossMap", 2);
+
+  initTexture(3, m_textMap, "images/alege.png");
+  glActiveTexture(GL_TEXTURE0+3);
+  glBindTexture(GL_TEXTURE_2D, m_textMap);
+  shader->setUniform("textMap", 3);
+
   // get the VBO instance and draw the built in teapot
   ngl::VAOPrimitives* prim = ngl::VAOPrimitives::instance();
 
-  m_transform.setPosition(0.0f, 0.0f, 0.0f);
+  m_transform.setPosition(0.0f, 0.0f, 3.0f);
+  m_transform.setScale(2.14f, 2.14f, 2.14f);
+  m_transform.setRotation(0.0f, 10.0f, 0.0f);
   loadMatricesToShader();
-  //m_mesh->draw();
-  prim->draw("sphere");
+  m_mesh->draw();
+  //m_transform.setPosition(0.0f, 0.23f, 0.0f);
+  //loadMatricesToShader();
 
+  //prim->draw("sphere");
+
+  ngl::ShaderLib* shader2 = ngl::ShaderLib::instance();
+  ( *shader2 )[ "PBR2" ]->use();
+
+  glActiveTexture(GL_TEXTURE0+1);
+  glBindTexture(GL_TEXTURE_2D, renderedTexture);
+  shader2->setUniform("renderedTexture", 1);
+
+  //initEnvironment();
+  // Initialise our gloss texture map here
+  //initTexture(2, m_glossMapTex, "images/gloss.png");
+  glActiveTexture(GL_TEXTURE0+2);
+  glBindTexture(GL_TEXTURE_2D, m_glossMapTex);
+  shader2->setUniform("glossMap", 2);
+
+  //initTexture(3, m_textMap, "images/alege.png");
+  glActiveTexture(GL_TEXTURE0+3);
+  glBindTexture(GL_TEXTURE_2D, m_textMap);
+  shader2->setUniform("textMap", 3);
+
+  m_transform.setPosition(0.0f, 0.9f, 3.0f);
+  m_transform.setScale(1.0f, 1.0f, 1.0f);
+
+  m_transform.setRotation(0.0f, 10.0f, 0.0f);
+  loadMatricesToShader();
+  m_mesh2->draw();
 
 
   // draw floor
-  //shader->setUniform("albedo",0.1f, 0.1f, 0.1f);
   ngl::ShaderLib* shaderF = ngl::ShaderLib::instance();
   ( *shaderF )[ "Floor" ]->use();
-  shader->setUniform("albedo", 0.3f, 0.1f, 0.2f);
-  shader->setUniform("ao",1.0f);
-  shader->setUniform("roughness",0.2f);
-  shader->setUniform("metallic", 0.7f);
+
+  shaderF->setUniform("albedo", 0.6f, 0.4f, 0.4f);
+  shaderF->setUniform("metallic", 0.1f);
+  shaderF->setUniform("roughness", 0.5f);
+  shaderF->setUniform("ao", 1.0f);
   m_transform.reset();
-  m_transform.setPosition(0.0f,-0.5f,0.0f);
+  m_transform.setPosition(0.0f,1.8f,0.0f);
   loadMatricesToShader();
   prim->draw("floor");
+
 
 
   // Draw Lights
@@ -339,7 +397,6 @@ void NGLScene::paintGL()
     shader->setUniform("MVP",MVP);
     prim->draw("sphere");
   }
-
 }
 
 
@@ -414,7 +471,7 @@ void NGLScene::initEnvironment() {
 
     // Set our cube map texture to on the shader so we can use it
     ngl::ShaderLib *shader=ngl::ShaderLib::instance();
-    shader->use("EnvironmentProgram");
+    shader->use("PBR");
     shader->setUniform("envMap", 0);
 }
 
@@ -463,6 +520,27 @@ void NGLScene::loadMatricesToShader()
   shader->setUniform( "M", M );
 }
 
+void NGLScene::loadMatricesToShader3()
+{
+  ngl::ShaderLib* shader = ngl::ShaderLib::instance();
+
+  ngl::Mat4 P;
+  ngl::Mat4 MV;
+  ngl::Mat4 M;
+
+  ngl::Mat3 normalMatrix;
+
+  //ngl::Mat4 M          = m_mouseGlobalTX * m_transform.getMatrix() ;
+  //MV           = m_cam.getViewMatrix() * M;
+  ngl::Mat4 MVP          = m_cam.getVPMatrix() * M;
+  normalMatrix = MV;
+  normalMatrix.inverse().transpose();
+  shader->setUniform( "MVP", MVP );
+  shader->setUniform( "normalMatrix", normalMatrix );
+  shader->setUniform( "M", M );
+
+}
+
 void NGLScene::loadMatricesToShader2()
 {
   ngl::ShaderLib* shader = ngl::ShaderLib::instance();
@@ -484,37 +562,6 @@ void NGLScene::loadMatricesToShader2()
 }
 
 
-/*unsigned int loadCubemap(vector<std::string> faces)
-{
-    unsigned int textureID;
-    glGenTextures(1, &textureID);
-    glBindTexture(GL_TEXTURE_CUBE_MAP, textureID);
-
-    int width, height, nrChannels;
-    for (unsigned int i = 0; i < faces.size(); i++)
-    {
-        unsigned char *data = stbi_load(faces[i].c_str(), &width, &height, &nrChannels, 0);
-        if (data)
-        {
-            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i,
-                         0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data
-            );
-            stbi_image_free(data);
-        }
-        else
-        {
-            std::cout << "Cubemap texture failed to load at path: " << faces[i] << std::endl;
-            stbi_image_free(data);
-        }
-    }
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-
-    return textureID;
-}*/
 
 //----------------------------------------------------------------------------------------------------------------------
 

@@ -77,6 +77,7 @@ private:
   //----------------------------------------------------------------------------------------------------------------------
   void loadMatricesToShader();
   void loadMatricesToShader2();
+  void loadMatricesToShader3();
   //----------------------------------------------------------------------------------------------------------------------
   /// @brief Qt Event called when a key is pressed
   /// @param [in] _event the Qt event to query for size etc
@@ -106,9 +107,8 @@ private:
   //----------------------------------------------------------------------------------------------------------------------
   void wheelEvent(QWheelEvent *_event) override;
 
-  std::unique_ptr<ngl::Obj> m_mesh;
+  std::unique_ptr<ngl::Obj> m_mesh, m_mesh2;
 
-  GLuint m_normalMap, m_metallicMap, m_aoMap, m_roughnessMap;
 
   void initTexture(const GLuint& /*texUnit*/, GLuint &/*texId*/, const char */*filename*/);
 
@@ -120,7 +120,7 @@ private:
 
   //void buildVAO();
 
-  GLuint m_envTex, m_glossMapTex;
+  GLuint m_envTex, m_glossMapTex, m_textMap, m_envTex2, m_renderedTex2, m_normalMap, m_metallicMap, m_roughnessMap, m_aoMap;
 
 
   std::unique_ptr <CubeMap> m_cubeMap;
